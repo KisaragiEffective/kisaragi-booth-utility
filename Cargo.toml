@@ -1,5 +1,5 @@
 [package]
-name = "booth-upload"
+name = "kisaragi-booth-utility"
 version = "0.1.0"
 edition = "2021"
 
