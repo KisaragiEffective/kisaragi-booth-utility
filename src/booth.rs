@@ -3,7 +3,7 @@
 pub enum UploadResponse {
     Ok {
         files: Vec<BoothUploadedObject>,
-        storage: StorageQuota,
+        storage: DiskQuota,
         file: BoothUploadedObject,
     },
     Err {
@@ -28,14 +28,14 @@ pub struct OpaqueFile {
 }
 
 #[derive(Deserialize)]
-pub struct StorageQuota {
-    #[serde(rename = "storage_quota")]
+pub struct DiskQuota {
+    #[serde(rename = "disk_quota")]
     pub quota: usize,
-    #[serde(rename = "storage_usage")]
+    #[serde(rename = "disk_usage")]
     pub usage: usize,
 }
 
-impl StorageQuota {
+impl DiskQuota {
     pub fn left(&self) -> usize {
         self.quota - self.usage
     }
@@ -43,14 +43,11 @@ impl StorageQuota {
 
 #[derive(Deserialize)]
 pub struct BoothUploadedObject {
-    id: FileId,
     item_id: ItemId,
-    file: OpaqueFile,
     pub file_size: usize,
-    download_count: usize,
-    crated_at: JapanStandardTime,
-    updated_at: JapanStandardTime,
-    deleted_at: Option<JapanStandardTime>,
-    display_order: usize,
     pub name: String,
+}
+
+const fn none<T>() -> Option<T> {
+    None
 }

@@ -281,6 +281,7 @@ async fn main() -> Result<(), ExecutionError> {
             let res = res
                 .json::<UploadResponse>()
                 .await?;
+
             match res {
                 UploadResponse::Ok { storage, file, .. } => {
                     use crate::pretty_size::pretty_size;
@@ -296,6 +297,8 @@ async fn main() -> Result<(), ExecutionError> {
                     return Err(ExecutionError::BoothApi(error))
                 }
             }
+
+             //*/
         }
         /*
         CommandLineSubCommand::ListChoice { booth_item_id } => {
