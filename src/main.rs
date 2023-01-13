@@ -1,3 +1,270 @@
-fn main() {
-    println!("Hello, world!");
+mod pretty_size;
+mod booth;
+
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::num::NonZeroUsize;
+use std::path::PathBuf;
+use std::sync::Arc;
+use clap::Parser;
+use reqwest::cookie::Jar;
+use reqwest::multipart::{Form, Part};
+use sqlite3::Error;
+use strum::EnumString;
+use thiserror::Error;
+use crate::booth::UploadResponse;
+use crate::ExecutionError::CommandLineArgumentValidationError;
+
+#[derive(Parser)]
+enum CommandLineSubCommand {
+    GetAuthorizationToken {
+        #[clap(short, long)]
+        /// Path to `cookies.sqlite` if firefox, `Cookies` if chromium.
+        cookie_file: PathBuf,
+        #[clap(short, long)]
+        /// accepts `firefox` or `chromium`.
+        /// Internet Explorer, Safari, Sleipnir, Lunaspace, legacy Edge and legacy Opera are unsupported.
+        browser: Browser,
+    },
+    Upload {
+        #[clap(short = 'i', long)]
+        /// Your item's id. e.g. https://booth.pm/ja/items/3519955 -> 3519955
+        booth_item_id: i32,
+        #[clap(short = 'p', long)]
+        /// Your local path to be uploaded.
+        artifact_path: PathBuf,
+        #[clap(short = 'm', long)]
+        /// Valid mime type must be given manually at this point
+        mime: String,
+        #[clap(short = 't', long, long = "token")]
+        /// Can be grabbed by `get-authorization-token` subcommand.
+        login_token: String,
+        #[clap(long)]
+        /// Sets `Accept-Language` in HTTP request, sending its value from your environment
+        /// variable to localize error to your language.
+        ///
+        /// This flag does not have effect on non-*nix platform.
+        localize_remote_error: bool,
+    },
+}
+
+#[derive(Error, Debug)]
+#[error("sqlite3 error (code {code:?}): {message:?}")]
+struct SQLite3ErrorWithCompare {
+    code: Option<isize>,
+    message: Option<String>,
+}
+
+impl PartialEq<Self> for SQLite3ErrorWithCompare {
+    fn eq(&self, other: &Self) -> bool {
+        let s = &self;
+        let o = &other;
+
+        s.code == o.code && s.message == o.message
+    }
+}
+
+impl Eq for SQLite3ErrorWithCompare {}
+
+impl From<sqlite3::Error> for SQLite3ErrorWithCompare {
+    fn from(value: Error) -> Self {
+        Self {
+            message: value.message,
+            code: value.code,
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+enum ExecutionError {
+    #[error("Database error occured: {0}")]
+    DatabaseError(#[from] SQLite3ErrorWithCompare),
+    #[error("Incorrect usage of command line argument: {0}")]
+    CommandLineArgumentValidationError(String),
+    #[error("IO error: {0}")]
+    IOError(#[from] std::io::Error),
+    #[error("Error occurred during fetching authorization token:")]
+    GetAuthorizationTokenError(#[from] GetAuthorizationTokenError),
+    #[error("HTTP request error: {0}")]
+    HttpError(#[from] reqwest::Error),
+    #[error("booth remote server error: {0}")]
+    BoothApi(String),
+}
+
+#[derive(Error, Debug)]
+enum GetAuthorizationTokenError {
+    #[error("No tokens found")]
+    NotFound,
+    #[error("Multiple tokens (size: {count}) found")]
+    MultipleTokensFound {
+        count: NonZeroUsize,
+    },
+}
+
+#[derive(EnumString, Debug, Clone, Eq, PartialEq)]
+enum Browser {
+    #[strum(serialize = "firefox")]
+    Firefox,
+    #[strum(serialize = "chrome", serialize = "chromium", serialize = "vivaldi", serialize = "opera", serialize = "edge")]
+    Chromium,
+    #[strum(default)]
+    UnsupportedBrowser(String),
+}
+
+#[tokio::main]
+async fn main() -> Result<(), ExecutionError> {
+    let clsc = CommandLineSubCommand::parse();
+    match clsc {
+        CommandLineSubCommand::GetAuthorizationToken { cookie_file, browser } => {
+            if !cookie_file.exists() {
+                return Err(CommandLineArgumentValidationError("--cookie-file must point to existing path".to_string()))
+            }
+
+            if cookie_file.is_dir() {
+                return Err(CommandLineArgumentValidationError("--cookie-file must point to file".to_string()))
+            }
+
+            let call_sql = || {
+                match browser {
+                    Browser::Firefox => r#"select value from moz_cookies where host = '.booth.pm' and name = '_plaza_session_nktz7u';"#,
+                    Browser::Chromium => r#"select value from cookies where host = '.booth.pm' and name = '_plaza_session_nktz7u'"#,
+                    Browser::UnsupportedBrowser(_) => unreachable!()
+                }
+            };
+            let handle = || {
+                let temp_file = tempfile::NamedTempFile::new()?;
+                std::fs::copy(&cookie_file, temp_file.path())?;
+                let s3 = sqlite3::open(temp_file.path()).map_err(SQLite3ErrorWithCompare::from)?;
+                let mut rows = vec![];
+                s3.iterate(call_sql(), |row| {
+                    let x = row.iter().map(|(_, v)| v.unwrap()).collect::<Vec<_>>().join("\t");
+                    rows.push(x);
+                    true
+                }).map_err(SQLite3ErrorWithCompare::from)?;
+
+                temp_file.close()?;
+
+                Ok::<_, ExecutionError>(rows)
+            };
+
+            let records = match browser {
+                Browser::Firefox => {
+                    println!("Firefox");
+                    handle()?
+                }
+                Browser::Chromium => {
+                    println!("Chromium");
+                    handle()?
+                }
+                Browser::UnsupportedBrowser(browser) => {
+                    return Err(ExecutionError::CommandLineArgumentValidationError(format!("{browser} is not supported yet.")))
+                }
+            };
+
+            if records.is_empty() {
+                return Err(ExecutionError::GetAuthorizationTokenError(GetAuthorizationTokenError::NotFound))
+            } else if records.len() >= 2 {
+                return Err(ExecutionError::GetAuthorizationTokenError(GetAuthorizationTokenError::MultipleTokensFound {
+                    // SAFETY: just known
+                    count: unsafe { NonZeroUsize::new_unchecked(records.len()) }
+                }))
+            } else {
+                let record = &records[0];
+                println!("{record}");
+            }
+        }
+        CommandLineSubCommand::Upload { booth_item_id, artifact_path, mime, login_token, localize_remote_error } => {
+            if !artifact_path.exists() {
+                return Err(CommandLineArgumentValidationError("--artifact-path must point to existing path".to_string()))
+            }
+
+            if artifact_path.is_dir() {
+                return Err(CommandLineArgumentValidationError("--artifact-path must point to file".to_string()))
+            }
+
+            let client = reqwest::ClientBuilder::new();
+            let url = format!("https://manage.booth.pm/items/{booth_item_id}/downloadables/");
+            eprintln!("url: {url}", url = &url);
+            let cookie_jar = Jar::default();
+            {
+                let crafted = format!("_plaza_session_nktz7u={v}; Domain=.booth.pm", v = &login_token);
+                cookie_jar.add_cookie_str(&crafted, &url.parse().unwrap());
+            }
+
+            let client = client
+                .gzip(true)
+                .cookie_provider(Arc::new(cookie_jar))
+                .build()
+                .unwrap();
+            let form = Form::default();
+            let b = BufReader::new(File::open(&artifact_path)?);
+            let p = Part::bytes(b.bytes().map(|x| x.unwrap()).collect::<Vec<_>>())
+                .mime_str(mime.as_str())?
+                .file_name(
+                    artifact_path.file_name().map(|x| x.to_str().unwrap().to_string()).expect("upload file must have name")
+                );
+
+            let form = form.part("downloadable[file]", p);
+
+            let mut req = client.post(url)
+                .multipart(form)
+                .header("Accept", "application/json");
+
+            if cfg!(unix) {
+                if let Some(language_preference) = std::env::var_os("LANG") {
+                    use std::os::unix::ffi::OsStrExt;
+                    if localize_remote_error && language_preference.as_bytes().starts_with(b"ja_JP") {
+                        req = req.header("Accept-Language", "ja");
+                    }
+                }
+            }
+
+            dbg!(&req);
+
+            let res = req
+                .send()
+                .await?;
+
+            let http_version = res.version();
+            let http_status = res.status().as_u16();
+            println!("{http_version:?} {http_status}");
+            let headers = res.headers();
+            for (name, value) in headers {
+                let value = if value.is_sensitive() {
+                    "《redacted》"
+                } else {
+                    value.to_str().expect("received garbage in headers from remote server")
+                };
+                println!("{name}: {value}", name = name.as_str());
+            }
+
+            let res_result = res
+                .json::<UploadResponse>()
+                .await;
+
+            let res = res_result?;
+            match res {
+                UploadResponse::Ok { storage, file, .. } => {
+                    use crate::pretty_size::pretty_size;
+                    println!("uploaded as {name} ({size})", name = file.name, size = pretty_size(file.file_size));
+                    println!(
+                        "quota: (permitted = {permitted}) - (used = {used}) = (left = {left})",
+                        permitted = storage.quota,
+                        used = storage.usage,
+                        left = storage.left()
+                    );
+                }
+                UploadResponse::Err { error } => {
+                    return Err(ExecutionError::BoothApi(error))
+                }
+            }
+        }
+        /*
+        CommandLineSubCommand::ListChoice { booth_item_id } => {
+            TODO
+        }
+
+         */
+    }
+    Ok(())
 }
