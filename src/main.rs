@@ -1,14 +1,16 @@
 mod pretty_size;
 mod booth;
 
-use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::Read;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use clap::Parser;
-use reqwest::cookie::Jar;
+use reqwest::cookie::{CookieStore, Jar};
+use reqwest::header::HeaderValue;
 use reqwest::multipart::{Form, Part};
+use reqwest::Url;
+use select::predicate::Predicate;
 use sqlite3::Error;
 use strum::EnumString;
 use thiserror::Error;
@@ -33,9 +35,6 @@ enum CommandLineSubCommand {
         #[clap(short = 'p', long)]
         /// Your local path to be uploaded.
         artifact_path: PathBuf,
-        #[clap(short = 'm', long)]
-        /// Valid mime type must be given manually at this point
-        mime: String,
         #[clap(short = 't', long, long = "token")]
         /// Can be grabbed by `get-authorization-token` subcommand.
         login_token: String,
@@ -45,6 +44,9 @@ enum CommandLineSubCommand {
         ///
         /// This flag does not have effect on non-*nix platform.
         localize_remote_error: bool,
+        #[clap(long)]
+        /// UNSAFE: Displays X-CSRF-Token to stdout.
+        unsafe_expose_csrf_token: bool,
     },
 }
 
@@ -149,11 +151,9 @@ async fn main() -> Result<(), ExecutionError> {
 
             let records = match browser {
                 Browser::Firefox => {
-                    println!("Firefox");
                     handle()?
                 }
                 Browser::Chromium => {
-                    println!("Chromium");
                     handle()?
                 }
                 Browser::UnsupportedBrowser(browser) => {
@@ -173,7 +173,13 @@ async fn main() -> Result<(), ExecutionError> {
                 println!("{record}");
             }
         }
-        CommandLineSubCommand::Upload { booth_item_id, artifact_path, mime, login_token, localize_remote_error } => {
+        CommandLineSubCommand::Upload {
+            booth_item_id,
+            artifact_path,
+            login_token,
+            localize_remote_error,
+            unsafe_expose_csrf_token,
+        } => {
             if !artifact_path.exists() {
                 return Err(CommandLineArgumentValidationError("--artifact-path must point to existing path".to_string()))
             }
@@ -183,32 +189,78 @@ async fn main() -> Result<(), ExecutionError> {
             }
 
             let client = reqwest::ClientBuilder::new();
-            let url = format!("https://manage.booth.pm/items/{booth_item_id}/downloadables/");
-            eprintln!("url: {url}", url = &url);
+            let upload_url = format!("https://manage.booth.pm/items/{booth_item_id}/downloadables/");
+            eprintln!("url: {url}", url = &upload_url);
+            eprintln!("from: `{p}`", p = &artifact_path.display());
+            #[derive(Default)]
+            struct ReadonlyCookieJar<J>(J);
+
+            impl<J: CookieStore> CookieStore for ReadonlyCookieJar<J> {
+                fn set_cookies(&self, _cookie_headers: &mut dyn Iterator<Item=&HeaderValue>, _url: &Url) {
+                }
+
+                fn cookies(&self, url: &Url) -> Option<HeaderValue> {
+                    self.0.cookies(url)
+                }
+            }
+
             let cookie_jar = Jar::default();
             {
                 let crafted = format!("_plaza_session_nktz7u={v}; Domain=.booth.pm", v = &login_token);
-                cookie_jar.add_cookie_str(&crafted, &url.parse().unwrap());
+                cookie_jar.add_cookie_str(&crafted, &upload_url.parse().unwrap());
             }
 
             let client = client
                 .gzip(true)
-                .cookie_provider(Arc::new(cookie_jar))
+                .cookie_provider(Arc::new(ReadonlyCookieJar(cookie_jar)))
                 .build()
                 .unwrap();
-            let form = Form::default();
-            let b = BufReader::new(File::open(&artifact_path)?);
-            let p = Part::bytes(b.bytes().map(|x| x.unwrap()).collect::<Vec<_>>())
-                .mime_str(mime.as_str())?
-                .file_name(
-                    artifact_path.file_name().map(|x| x.to_str().unwrap().to_string()).expect("upload file must have name")
-                );
 
-            let form = form.part("downloadable[file]", p);
+            // X-CSRF-Token対策
+            println!("Getting CSRF token");
+            let top_page = client.get(format!("https://manage.booth.pm/items/{booth_item_id}/edit"))
+                .header("Accept", "text/html; charset=utf-8")
+                .header("User-Agent", "KisaragiEffective/booth-upload-ci")
+                .send()
+                .await?
+                .text()
+                .await?;
 
-            let mut req = client.post(url)
+            let doc = select::document::Document::from(&*top_page);
+            let csrf_opt = doc
+                .find(select::predicate::Name("meta").and(select::predicate::Attr("name", "csrf-token")))
+                .filter_map(|x| x.attr("content"))
+                .next();
+
+            let csrf_token = if let Some(csrf) = csrf_opt {
+                if unsafe_expose_csrf_token {
+                    println!("[CSRF] {csrf}")
+                }
+                csrf
+            } else {
+                return Err(ExecutionError::BoothApi("Failed to find CSRF token".to_string()))
+            };
+
+
+            let form = {
+                let form = Form::default();
+                let bytes = std::fs::read(&artifact_path)?;
+                let file_name = artifact_path.file_name()
+                    .map(|x| x.to_str().unwrap().to_string())
+                    .expect("upload file must have name");
+                // mime is inferred by remote
+                let upload = Part::bytes(bytes)
+                    .file_name(file_name);
+
+                form.part("downloadable[file]", upload)
+            };
+
+            let mut req = client.post(upload_url)
                 .multipart(form)
-                .header("Accept", "application/json");
+                .header("Accept", "application/json")
+                .header("User-Agent", "KisaragiEffective/booth-upload-ci")
+                // 欠けているとリクエストが正しくても422
+                .header("X-CSRF-Token", csrf_token);
 
             if cfg!(unix) {
                 if let Some(language_preference) = std::env::var_os("LANG") {
@@ -225,24 +277,24 @@ async fn main() -> Result<(), ExecutionError> {
                 .send()
                 .await?;
 
-            let http_version = res.version();
-            let http_status = res.status().as_u16();
-            println!("{http_version:?} {http_status}");
-            let headers = res.headers();
-            for (name, value) in headers {
-                let value = if value.is_sensitive() {
-                    "《redacted》"
-                } else {
-                    value.to_str().expect("received garbage in headers from remote server")
-                };
-                println!("{name}: {value}", name = name.as_str());
+            {
+                let http_version = res.version();
+                let http_status = res.status().as_u16();
+                println!("{http_version:?} {http_status}");
+                let headers = res.headers();
+                for (name, value) in headers {
+                    let value = if value.is_sensitive() {
+                        "《redacted》"
+                    } else {
+                        value.to_str().expect("received garbage in headers from remote server")
+                    };
+                    println!("{name}: {value}", name = name.as_str());
+                }
             }
 
-            let res_result = res
+            let res = res
                 .json::<UploadResponse>()
-                .await;
-
-            let res = res_result?;
+                .await?;
             match res {
                 UploadResponse::Ok { storage, file, .. } => {
                     use crate::pretty_size::pretty_size;
