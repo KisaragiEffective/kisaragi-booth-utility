@@ -1,21 +1,15 @@
 mod pretty_size;
 mod booth;
 
-use std::io::Read;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::Arc;
 use clap::Parser;
-use reqwest::cookie::{CookieStore, Jar};
-use reqwest::header::HeaderValue;
 use reqwest::multipart::{Form, Part};
-use reqwest::Url;
 use select::predicate::Predicate;
 use sqlite3::Error;
 use strum::EnumString;
 use thiserror::Error;
 use crate::booth::UploadResponse;
-use crate::ExecutionError::CommandLineArgumentValidationError;
 
 #[derive(Parser)]
 enum CommandLineSubCommand {
@@ -119,11 +113,11 @@ async fn main() -> Result<(), ExecutionError> {
     match clsc {
         CommandLineSubCommand::GetAuthorizationToken { cookie_file, browser } => {
             if !cookie_file.exists() {
-                return Err(CommandLineArgumentValidationError("--cookie-file must point to existing path".to_string()))
+                return Err(ExecutionError::CommandLineArgumentValidationError("--cookie-file must point to existing path".to_string()))
             }
 
             if cookie_file.is_dir() {
-                return Err(CommandLineArgumentValidationError("--cookie-file must point to file".to_string()))
+                return Err(ExecutionError::CommandLineArgumentValidationError("--cookie-file must point to file".to_string()))
             }
 
             let call_sql = || {
@@ -181,64 +175,52 @@ async fn main() -> Result<(), ExecutionError> {
             unsafe_expose_csrf_token,
         } => {
             if !artifact_path.exists() {
-                return Err(CommandLineArgumentValidationError("--artifact-path must point to existing path".to_string()))
+                return Err(ExecutionError::CommandLineArgumentValidationError("--artifact-path must point to existing path".to_string()))
             }
 
             if artifact_path.is_dir() {
-                return Err(CommandLineArgumentValidationError("--artifact-path must point to file".to_string()))
+                return Err(ExecutionError::CommandLineArgumentValidationError("--artifact-path must point to file".to_string()))
             }
 
-            let client = reqwest::ClientBuilder::new();
             let upload_url = format!("https://manage.booth.pm/items/{booth_item_id}/downloadables/");
             eprintln!("url: {url}", url = &upload_url);
             eprintln!("from: `{p}`", p = &artifact_path.display());
-            #[derive(Default)]
-            struct ReadonlyCookieJar<J>(J);
 
-            impl<J: CookieStore> CookieStore for ReadonlyCookieJar<J> {
-                fn set_cookies(&self, _cookie_headers: &mut dyn Iterator<Item=&HeaderValue>, _url: &Url) {
+            // reqwestのJarがなぜかcookieを渡さないので主導でmanipulateする
+            let baked_cookie = format!("_plaza_session_nktz7u={v}", v = &login_token);
+
+            let csrf_token = {
+                let client = reqwest::ClientBuilder::new()
+                    .gzip(true)
+                    .build()
+                    .unwrap();
+
+                // X-CSRF-Token対策
+                println!("Getting CSRF token");
+                let top_page = client.get(format!("https://manage.booth.pm/items/{booth_item_id}/edit"))
+                    .header("Accept", "text/html; charset=utf-8")
+                    .header("User-Agent", "KisaragiEffective/booth-upload-ci")
+                    .header("Cookie", &baked_cookie)
+                    .send()
+                    .await?
+                    .text()
+                    .await?;
+
+                let doc = select::document::Document::from(&*top_page);
+                let csrf_opt = doc
+                    .find(select::predicate::Name("meta").and(select::predicate::Attr("name", "csrf-token")))
+                    .filter_map(|x| x.attr("content"))
+                    .next();
+
+                if let Some(csrf) = csrf_opt {
+                    let csrf = csrf.to_owned();
+                    if unsafe_expose_csrf_token {
+                        println!("[CSRF] {csrf}")
+                    }
+                    csrf
+                } else {
+                    return Err(ExecutionError::BoothApi("Failed to find CSRF token".to_string()))
                 }
-
-                fn cookies(&self, url: &Url) -> Option<HeaderValue> {
-                    self.0.cookies(url)
-                }
-            }
-
-            let cookie_jar = Jar::default();
-            {
-                let crafted = format!("_plaza_session_nktz7u={v}; Domain=.booth.pm", v = &login_token);
-                cookie_jar.add_cookie_str(&crafted, &upload_url.parse().unwrap());
-            }
-
-            let client = client
-                .gzip(true)
-                .cookie_provider(Arc::new(ReadonlyCookieJar(cookie_jar)))
-                .build()
-                .unwrap();
-
-            // X-CSRF-Token対策
-            println!("Getting CSRF token");
-            let top_page = client.get(format!("https://manage.booth.pm/items/{booth_item_id}/edit"))
-                .header("Accept", "text/html; charset=utf-8")
-                .header("User-Agent", "KisaragiEffective/booth-upload-ci")
-                .send()
-                .await?
-                .text()
-                .await?;
-
-            let doc = select::document::Document::from(&*top_page);
-            let csrf_opt = doc
-                .find(select::predicate::Name("meta").and(select::predicate::Attr("name", "csrf-token")))
-                .filter_map(|x| x.attr("content"))
-                .next();
-
-            let csrf_token = if let Some(csrf) = csrf_opt {
-                if unsafe_expose_csrf_token {
-                    println!("[CSRF] {csrf}")
-                }
-                csrf
-            } else {
-                return Err(ExecutionError::BoothApi("Failed to find CSRF token".to_string()))
             };
 
 
@@ -255,10 +237,16 @@ async fn main() -> Result<(), ExecutionError> {
                 form.part("downloadable[file]", upload)
             };
 
+            let client = reqwest::ClientBuilder::new()
+                .gzip(true)
+                .build()
+                .unwrap();
+
             let mut req = client.post(upload_url)
                 .multipart(form)
                 .header("Accept", "application/json")
                 .header("User-Agent", "KisaragiEffective/booth-upload-ci")
+                .header("Cookie", &baked_cookie)
                 // 欠けているとリクエストが正しくても422
                 .header("X-CSRF-Token", csrf_token);
 
@@ -270,8 +258,6 @@ async fn main() -> Result<(), ExecutionError> {
                     }
                 }
             }
-
-            dbg!(&req);
 
             let res = req
                 .send()
