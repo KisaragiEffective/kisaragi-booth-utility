@@ -9,7 +9,7 @@ use select::predicate::Predicate;
 use sqlite3::Error;
 use strum::EnumString;
 use thiserror::Error;
-use crate::booth::UploadResponse;
+use crate::booth::{UploadError, UploadResult};
 
 #[derive(Parser)]
 enum CommandLineSubCommand {
@@ -74,17 +74,17 @@ impl From<sqlite3::Error> for SQLite3ErrorWithCompare {
 #[derive(Error, Debug)]
 enum ExecutionError {
     #[error("Database error occured: {0}")]
-    DatabaseError(#[from] SQLite3ErrorWithCompare),
+    Database(#[from] SQLite3ErrorWithCompare),
     #[error("Incorrect usage of command line argument: {0}")]
-    CommandLineArgumentValidationError(String),
+    CommandLineArgumentValidation(String),
     #[error("IO error: {0}")]
-    IOError(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("Error occurred during fetching authorization token:")]
-    GetAuthorizationTokenError(#[from] GetAuthorizationTokenError),
+    GetAuthorizationToken(#[from] GetAuthorizationTokenError),
     #[error("HTTP request error: {0}")]
-    HttpError(#[from] reqwest::Error),
+    Http(#[from] reqwest::Error),
     #[error("booth remote server error: {0}")]
-    BoothApi(String),
+    BoothUploadError(#[from] booth::UploadError),
 }
 
 #[derive(Error, Debug)]
@@ -113,11 +113,11 @@ async fn main() -> Result<(), ExecutionError> {
     match clsc {
         CommandLineSubCommand::GetAuthorizationToken { cookie_file, browser } => {
             if !cookie_file.exists() {
-                return Err(ExecutionError::CommandLineArgumentValidationError("--cookie-file must point to existing path".to_string()))
+                return Err(ExecutionError::CommandLineArgumentValidation("--cookie-file must point to existing path".to_string()))
             }
 
             if cookie_file.is_dir() {
-                return Err(ExecutionError::CommandLineArgumentValidationError("--cookie-file must point to file".to_string()))
+                return Err(ExecutionError::CommandLineArgumentValidation("--cookie-file must point to file".to_string()))
             }
 
             let call_sql = || {
@@ -151,14 +151,14 @@ async fn main() -> Result<(), ExecutionError> {
                     handle()?
                 }
                 Browser::UnsupportedBrowser(browser) => {
-                    return Err(ExecutionError::CommandLineArgumentValidationError(format!("{browser} is not supported yet.")))
+                    return Err(ExecutionError::CommandLineArgumentValidation(format!("{browser} is not supported yet.")))
                 }
             };
 
             if records.is_empty() {
-                return Err(ExecutionError::GetAuthorizationTokenError(GetAuthorizationTokenError::NotFound))
+                return Err(ExecutionError::GetAuthorizationToken(GetAuthorizationTokenError::NotFound))
             } else if records.len() >= 2 {
-                return Err(ExecutionError::GetAuthorizationTokenError(GetAuthorizationTokenError::MultipleTokensFound {
+                return Err(ExecutionError::GetAuthorizationToken(GetAuthorizationTokenError::MultipleTokensFound {
                     // SAFETY: just known
                     count: unsafe { NonZeroUsize::new_unchecked(records.len()) }
                 }))
@@ -175,11 +175,11 @@ async fn main() -> Result<(), ExecutionError> {
             unsafe_expose_csrf_token,
         } => {
             if !artifact_path.exists() {
-                return Err(ExecutionError::CommandLineArgumentValidationError("--artifact-path must point to existing path".to_string()))
+                return Err(ExecutionError::CommandLineArgumentValidation("--artifact-path must point to existing path".to_string()))
             }
 
             if artifact_path.is_dir() {
-                return Err(ExecutionError::CommandLineArgumentValidationError("--artifact-path must point to file".to_string()))
+                return Err(ExecutionError::CommandLineArgumentValidation("--artifact-path must point to file".to_string()))
             }
 
             let upload_url = format!("https://manage.booth.pm/items/{booth_item_id}/downloadables/");
@@ -219,7 +219,7 @@ async fn main() -> Result<(), ExecutionError> {
                     }
                     csrf
                 } else {
-                    return Err(ExecutionError::BoothApi("Failed to find CSRF token".to_string()))
+                    return Err(ExecutionError::BoothUploadError(UploadError::UnableToObtainCsrfToken))
                 }
             };
 
@@ -278,11 +278,12 @@ async fn main() -> Result<(), ExecutionError> {
                 }
             }
 
+
             let res = res
-                .json::<UploadResponse>()
+                .json::<UploadResult>()
                 .await?;
             match res {
-                UploadResponse::Ok { storage, file, .. } => {
+                UploadResult::Ok { storage, uploaded_file: file, .. } => {
                     use crate::pretty_size::pretty_size;
                     println!("uploaded as {name} ({size})", name = file.name, size = pretty_size(file.file_size));
                     println!(
@@ -292,10 +293,11 @@ async fn main() -> Result<(), ExecutionError> {
                         left = storage.left()
                     );
                 }
-                UploadResponse::Err { error } => {
-                    return Err(ExecutionError::BoothApi(error))
+                UploadResult::Err(error) => {
+                    return Err(error.into())
                 }
             }
+            //*/
         }
         /*
         CommandLineSubCommand::ListChoice { booth_item_id } => {
