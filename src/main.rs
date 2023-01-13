@@ -1,17 +1,19 @@
 mod pretty_size;
 mod booth;
+mod sqlite;
 
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use clap::Parser;
 use reqwest::multipart::{Form, Part};
 use select::predicate::Predicate;
-use sqlite3::Error;
 use strum::EnumString;
 use thiserror::Error;
 use crate::booth::{UploadError, UploadResult};
+use crate::sqlite::SQLite3ErrorWithCompare;
 
 #[derive(Parser)]
+/// This project is not related, developed, nor affiliated by pixiv inc.
 enum CommandLineSubCommand {
     GetAuthorizationToken {
         #[clap(short, long)]
@@ -41,38 +43,15 @@ enum CommandLineSubCommand {
         #[clap(long)]
         /// UNSAFE: Displays X-CSRF-Token to stdout.
         unsafe_expose_csrf_token: bool,
+        #[clap(long)]
+        /// UNSAFE: prints ALL header, including `cookie` header.
+        /// Only intended usage is debug purpose.
+        unsafe_expose_all_header: bool,
     },
 }
 
 #[derive(Error, Debug)]
-#[error("sqlite3 error (code {code:?}): {message:?}")]
-struct SQLite3ErrorWithCompare {
-    code: Option<isize>,
-    message: Option<String>,
-}
-
-impl PartialEq<Self> for SQLite3ErrorWithCompare {
-    fn eq(&self, other: &Self) -> bool {
-        let s = &self;
-        let o = &other;
-
-        s.code == o.code && s.message == o.message
-    }
-}
-
-impl Eq for SQLite3ErrorWithCompare {}
-
-impl From<sqlite3::Error> for SQLite3ErrorWithCompare {
-    fn from(value: Error) -> Self {
-        Self {
-            message: value.message,
-            code: value.code,
-        }
-    }
-}
-
-#[derive(Error, Debug)]
-enum ExecutionError {
+pub(crate) enum ExecutionError {
     #[error("Database error occured: {0}")]
     Database(#[from] SQLite3ErrorWithCompare),
     #[error("Incorrect usage of command line argument: {0}")]
@@ -98,7 +77,7 @@ enum GetAuthorizationTokenError {
 }
 
 #[derive(EnumString, Debug, Clone, Eq, PartialEq)]
-enum Browser {
+pub(crate) enum Browser {
     #[strum(serialize = "firefox")]
     Firefox,
     #[strum(serialize = "chrome", serialize = "chromium", serialize = "vivaldi", serialize = "opera", serialize = "edge")]
@@ -112,60 +91,7 @@ async fn main() -> Result<(), ExecutionError> {
     let clsc = CommandLineSubCommand::parse();
     match clsc {
         CommandLineSubCommand::GetAuthorizationToken { cookie_file, browser } => {
-            if !cookie_file.exists() {
-                return Err(ExecutionError::CommandLineArgumentValidation("--cookie-file must point to existing path".to_string()))
-            }
-
-            if cookie_file.is_dir() {
-                return Err(ExecutionError::CommandLineArgumentValidation("--cookie-file must point to file".to_string()))
-            }
-
-            let call_sql = || {
-                match browser {
-                    Browser::Firefox => r#"select value from moz_cookies where host = '.booth.pm' and name = '_plaza_session_nktz7u';"#,
-                    Browser::Chromium => r#"select value from cookies where host = '.booth.pm' and name = '_plaza_session_nktz7u'"#,
-                    Browser::UnsupportedBrowser(_) => unreachable!()
-                }
-            };
-            let handle = || {
-                let temp_file = tempfile::NamedTempFile::new()?;
-                std::fs::copy(&cookie_file, temp_file.path())?;
-                let s3 = sqlite3::open(temp_file.path()).map_err(SQLite3ErrorWithCompare::from)?;
-                let mut rows = vec![];
-                s3.iterate(call_sql(), |row| {
-                    let x = row.iter().map(|(_, v)| v.unwrap()).collect::<Vec<_>>().join("\t");
-                    rows.push(x);
-                    true
-                }).map_err(SQLite3ErrorWithCompare::from)?;
-
-                temp_file.close()?;
-
-                Ok::<_, ExecutionError>(rows)
-            };
-
-            let records = match browser {
-                Browser::Firefox => {
-                    handle()?
-                }
-                Browser::Chromium => {
-                    handle()?
-                }
-                Browser::UnsupportedBrowser(browser) => {
-                    return Err(ExecutionError::CommandLineArgumentValidation(format!("{browser} is not supported yet.")))
-                }
-            };
-
-            if records.is_empty() {
-                return Err(ExecutionError::GetAuthorizationToken(GetAuthorizationTokenError::NotFound))
-            } else if records.len() >= 2 {
-                return Err(ExecutionError::GetAuthorizationToken(GetAuthorizationTokenError::MultipleTokensFound {
-                    // SAFETY: just known
-                    count: unsafe { NonZeroUsize::new_unchecked(records.len()) }
-                }))
-            } else {
-                let record = &records[0];
-                println!("{record}");
-            }
+            sqlite::it(cookie_file, browser)?
         }
         CommandLineSubCommand::Upload {
             booth_item_id,
@@ -173,6 +99,7 @@ async fn main() -> Result<(), ExecutionError> {
             login_token,
             localize_remote_error,
             unsafe_expose_csrf_token,
+            unsafe_expose_all_header,
         } => {
             if !artifact_path.exists() {
                 return Err(ExecutionError::CommandLineArgumentValidation("--artifact-path must point to existing path".to_string()))
@@ -263,7 +190,7 @@ async fn main() -> Result<(), ExecutionError> {
                 .send()
                 .await?;
 
-            {
+            if unsafe_expose_all_header {
                 let http_version = res.version();
                 let http_status = res.status().as_u16();
                 println!("{http_version:?} {http_status}");
