@@ -129,9 +129,13 @@ pub fn pretty_size(bytes: usize) -> String {
         write_numeric_char(bytes, 1000, &mut buf, 0, &mut rest, &mut head_index);
         write_numeric_char(bytes, 100, &mut buf, 1, &mut rest, &mut head_index);
         write_numeric_char(bytes, 10, &mut buf, 2, &mut rest, &mut head_index);
-        write_numeric_char(bytes, 1, &mut buf, 3, &mut rest, &mut head_index);
+        buf[3] = convert_to_numeric_char(rest % 10);
+        // SAFETY: 4 != 0.
+        head_index.get_or_insert_with(|| (unsafe { NonZeroUsize::new_unchecked(3 + 1) }));
         buf[4] = b'B';
+        // SAFETY: we've just initialized head_index with some value.
         let head = unsafe { head_index.unwrap_unchecked() }.get() - 1;
+        // SAFETY: convert_to_numeric_char yields only b'0'..b'9', which is valid codepoint for UTF-8 strings.
         unsafe { std::str::from_utf8_unchecked(&buf[head..]).to_string() }
     }
 }
