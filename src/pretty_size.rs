@@ -47,17 +47,17 @@ pub fn pretty_size(bytes: usize) -> String {
         let rest_1 = rest / div_10;
         let rest = rest - (rest_1 * div_10);
         let div_100 = unit / 100;
-        let rest_2 = if rest != 0 {
-            rest / div_100
-        } else {
+        let rest_2 = if rest == 0 {
             0
+        } else {
+            rest / div_100
         };
         let rest = rest - (rest_2 * div_100);
         let div_1000 = unit / 1000;
-        let _rest_3 = if rest != 0 {
-            rest / div_1000
-        } else {
+        let _rest_3 = if rest == 0 {
             0
+        } else {
+            rest / div_1000
         };
         // round
         /*

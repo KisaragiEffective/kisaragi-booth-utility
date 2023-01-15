@@ -31,6 +31,7 @@ impl From<Error> for SQLite3ErrorWithCompare {
     }
 }
 
+#[allow(clippy::redundant_pub_crate)]
 pub(crate) fn it(cookie_file: impl AsRef<Path>, browser: Browser) -> Result<(), ExecutionError> {
     let cookie_file = cookie_file.as_ref();
 
@@ -51,7 +52,7 @@ pub(crate) fn it(cookie_file: impl AsRef<Path>, browser: Browser) -> Result<(), 
     };
     let handle = || {
         let temp_file = tempfile::NamedTempFile::new()?;
-        std::fs::copy(&cookie_file, temp_file.path())?;
+        std::fs::copy(cookie_file, temp_file.path())?;
         let s3 = sqlite3::open(temp_file.path()).map_err(SQLite3ErrorWithCompare::from)?;
         let mut rows = vec![];
         s3.iterate(call_sql(), |row| {
@@ -66,10 +67,7 @@ pub(crate) fn it(cookie_file: impl AsRef<Path>, browser: Browser) -> Result<(), 
     };
 
     let records = match browser {
-        Browser::Firefox => {
-            handle()?
-        }
-        Browser::Chromium => {
+        Browser::Chromium | Browser::Firefox => {
             handle()?
         }
         Browser::UnsupportedBrowser(browser) => {

@@ -66,7 +66,7 @@ pub(crate) enum ExecutionError {
     #[error("HTTP request error: {0}")]
     Http(#[from] reqwest::Error),
     #[error("booth remote server error: {0}")]
-    BoothUploadError(#[from] booth::UploadError),
+    BoothUploadError(#[from] UploadError),
 }
 
 #[derive(Error, Debug)]
@@ -89,12 +89,14 @@ pub(crate) enum Browser {
     UnsupportedBrowser(String),
 }
 
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::similar_names)]
 #[tokio::main]
 async fn main() -> Result<(), ExecutionError> {
     let clsc = CommandLineSubCommand::parse();
     match clsc {
         CommandLineSubCommand::GetAuthorizationToken { cookie_file, browser } => {
-            sqlite::it(cookie_file, browser)?
+            sqlite::it(cookie_file, browser)?;
         }
         CommandLineSubCommand::Upload {
             booth_item_id,
@@ -139,13 +141,12 @@ async fn main() -> Result<(), ExecutionError> {
                 let doc = select::document::Document::from(&*top_page);
                 let csrf_opt = doc
                     .find(select::predicate::Name("meta").and(select::predicate::Attr("name", "csrf-token")))
-                    .filter_map(|x| x.attr("content"))
-                    .next();
+                    .find_map(|x| x.attr("content"));
 
                 if let Some(csrf) = csrf_opt {
                     let csrf = csrf.to_owned();
                     if unsafe_expose_csrf_token {
-                        println!("[CSRF] {csrf}")
+                        println!("[CSRF] {csrf}");
                     }
                     csrf
                 } else {
@@ -209,6 +210,7 @@ async fn main() -> Result<(), ExecutionError> {
             }
 
 
+            #[allow(clippy::similar_names)]
             let res = res
                 .json::<UploadResult>()
                 .await?;
