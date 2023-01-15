@@ -4,12 +4,12 @@ pub enum UploadResult {
     Ok {
         /// 過去にアップロードされたファイル。`uploaded_file`を**含まない**。
         #[serde(rename = "files")]
-        uploaded_in_past: Vec<BoothUploadedObject>,
+        uploaded_in_past: Vec<UploadedObject>,
         /// アップロードが完了した時点の容量情報
         storage: DiskQuota,
         /// 現在アップロードしたファイル
         #[serde(rename = "file")]
-        uploaded_file: BoothUploadedObject,
+        uploaded_file: UploadedObject,
     },
     Err(UploadError),
 }
@@ -58,11 +58,8 @@ pub struct DownloadableContentError(Vec<String>);
 #[error("{0:?}")]
 pub struct InnerError(String);
 
-use chrono::{DateTime, FixedOffset};
 use serde::Deserialize;
 use thiserror::Error;
-
-type JapanStandardTime = DateTime<FixedOffset>;
 
 #[derive(Deserialize)]
 pub struct FileId(u32);
@@ -84,18 +81,14 @@ pub struct DiskQuota {
 }
 
 impl DiskQuota {
-    pub fn left(&self) -> usize {
+    pub const fn left(&self) -> usize {
         self.quota - self.usage
     }
 }
 
 #[derive(Deserialize)]
-pub struct BoothUploadedObject {
-    item_id: ItemId,
+pub struct UploadedObject {
+    // item_id: ItemId,
     pub file_size: usize,
     pub name: String,
-}
-
-const fn none<T>() -> Option<T> {
-    None
 }
