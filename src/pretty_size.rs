@@ -34,12 +34,14 @@ pub fn pretty_size(bytes: usize) -> String {
         }
     }
 
-    const GIB: usize = 1024 * 1024 * 1024;
-    const MIB: usize = 1024 * 1024;
-    const KIB: usize = 1024;
+    // SAFETY: each value never equal to zero.
+    const GIB: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1024 * 1024 * 1024) };
+    const MIB: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1024 * 1024) };
+    const KIB: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1024) };
 
     #[inline]
-    fn prepare(bytes: usize, unit: usize) -> (usize, usize, usize) {
+    fn prepare(bytes: usize, unit: NonZeroUsize) -> (usize, usize, usize) {
+        let unit = unit.get();
         let x = bytes;
         let n = x / unit;
         let rest = x - (n * unit);
@@ -148,15 +150,15 @@ pub fn pretty_size(bytes: usize) -> String {
         unsafe { std::str::from_utf8_unchecked(&bytes[head..]).to_string() }
     }
 
-    if bytes > 100 * GIB {
+    if bytes > 100 * GIB.get() {
         unreachable!("domain constraints");
     }
 
-    if bytes >= GIB {
+    if bytes >= GIB.get() {
         invoke!(GIB, b"GiB")
-    } else if bytes >= MIB {
+    } else if bytes >= MIB.get() {
         invoke!(MIB, b"MiB")
-    } else if bytes >= KIB {
+    } else if bytes >= KIB.get() {
         invoke!(KIB, b"KiB")
     } else {
         let mut buf = [0u8; 5];
