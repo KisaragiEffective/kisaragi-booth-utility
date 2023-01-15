@@ -1,3 +1,6 @@
+#![deny(clippy::all, clippy::perf)]
+#![warn(clippy::nursery, clippy::pedantic)]
+
 mod pretty_size;
 mod booth;
 mod sqlite;
