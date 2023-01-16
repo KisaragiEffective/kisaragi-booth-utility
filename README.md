@@ -1,17 +1,17 @@
 # kisaragi-booth-utility
-KisaragiEffectiveが開発した[booth][booth-top]™<sup>†1</sup>の利用を補助するための実行ファイル群です。
+KisaragiEffectiveが開発した[BOOTH][BOOTH-top]™<sup>†1</sup>の利用を補助するための実行ファイル群です。
 
 ## はじめに
-* このプロジェクトは株式会社ピクシブと何ら関係を持つものではなく、ピクシブ株式会社が主導及び開発するものではありません。
+* このプロジェクトはピクシブ株式会社と何ら関係を持つものではなく、ピクシブ株式会社が主導及び開発するものではありません。
 
 ## このプロジェクトの目的
-* [booth][booth-top]における継続的デプロイを補助する。
+* [BOOTH][BOOTH-top]における継続的デプロイを補助する。
 
 ## ユースケース
-* 「[booth経済圏](https://inside.pixiv.blog/2020/07/21/160722)」におけるより便利で楽しい生活
+* 「[BOOTH経済圏](https://inside.pixiv.blog/2020/07/21/160722)」におけるより便利で楽しい生活
 * ヘッドレスサーバーとBOOTHとの橋渡し
   * ヘッドレスサーバー＝継続的デプロイ用のサーバーなど、デスクトップ環境が存在しないサーバー
-* 継続的インテグレーションの成果物をboothのサーバーへ送信する橋渡し
+* 継続的インテグレーションの成果物をBOOTHのサーバーへ送信する橋渡し
 * ブラウザレス
 * …
 
@@ -48,7 +48,7 @@ kisaragi-booth-utility get-authorization-token --cookie-file <場所> --browser 
 
 3. トークンが文字列として出力されるので、選択してコピーします。**この文字列はあなたのパスワードと同じです**。誰にも明かさないようにしてください。
 4. 以下のコマンドでアップロードします。
-  * `<アイテムID>`はboothのIDを指定します。例えば、URLが `https://booth.pm/ja/items/1234567` なら、指定するのは`1234567`です。
+  * `<アイテムID>`はBOOTHのIDを指定します。例えば、URLが `https://booth.pm/ja/items/1234567` なら、指定するのは`1234567`です。
   * `<アップロードするファイルのパス>`はファイルのパスです。相対パスまたは絶対パスが指定できます。
   * `<トークン>`は3でコピーした文字列で置き換えます。
 
@@ -78,7 +78,7 @@ kisaragi-booth-utility upload -i 1234567 -p ./利用規約.pdf -t this_is_dummy_
 
 ```yml
 # --- CREDIT ---
-# This file is distributed on https://github.com/KisaragiEffective/booth-utility-tool.
+# This file is distributed on https://github.com/KisaragiEffective/kisaragi-booth-utility.
 # The original file is licensed under either of Apache License, Version 2.0 or MIT license at your option. 
 # 
 
@@ -125,7 +125,7 @@ kisaragi-booth-utility upload -i 1234567 -p ./利用規約.pdf -t this_is_dummy_
 #  DEALINGS IN THE SOFTWARE.
 # --- END OF CREDIT ---
 
-name: Deploy to booth
+name: Deploy to BOOTH
 on:
   release:
     type:
@@ -157,7 +157,7 @@ jobs:
       - name: Extract binary
         run: |
           tar -xvf kisaragi-booth-utility_0.1.0.20220115231500_x86_64-unknown-linux-musl.tar.gz
-      - name: Deploy to booth
+      - name: Deploy to BOOTH
         env:
           BOOTH_DEPLOY_TOKEN: ${{ secrets.BOOTH_DEPLOY_TOKEN }}
         run: |
@@ -165,7 +165,7 @@ jobs:
 ```
 
 ## ピクシブ株式会社が定める規約との関連性
-* ご利用にあたってはピクシブ株式会社が定める[サービス共通規約](https://policies.pixiv.net/)及び[boothに対する個別規約](https://policies.pixiv.net/#booth)をお守りください。
+* ご利用にあたってはピクシブ株式会社が定める[サービス共通規約](https://policies.pixiv.net/)及び[BOOTHに対する個別規約](https://policies.pixiv.net/#booth)をお守りください。
   * サーバーに極端な負荷をかけるような使い方はおやめください。
   * このアプリケーションを使ってアップロードされた成果物の一切の権利は、引き続きそれを創作したユーザーに帰属します。
   * このアプリケーションの使用に関しては、各自がその一切の責任を負い、開発者は一切の責任を負いません。
@@ -199,6 +199,6 @@ jobs:
 お問い合わせいただく際は、電子メールでのお問い合わせをお願いいたします。
 件名に「`kisaragi-booth-utility`」と入れていただき、`kisarag.effective+contact[at]gmail.com`へお送りください。お手数ですが、スパム防止のため`[at]`はアットマークで置き換えていただくようお願いします。
 
-†1: boothはピクシブ株式会社の登録商標です。
+†1: BOOTHはピクシブ株式会社の登録商標です。
 
-[booth-top]: https://booth.pm/
+[BOOTH-top]: https://booth.pm/
