@@ -40,10 +40,27 @@ kisaragi-booth-utility get-authorization-token --cookie-file <場所> --browser 
 
 3. トークンが文字列として出力されるので、選択してコピーします。**この文字列はあなたのパスワードと同じです**。誰にも明かさないようにしてください。
 4. 以下のコマンドでアップロードします。
+  * `<アイテムID>`はboothのIDを指定します。例えば、URLが `https://booth.pm/ja/items/1234567` なら、指定するのは`1234567`です。
+  * `<アップロードするファイルのパス>`はファイルのパスです。相対パスまたは絶対パスが指定できます。
+  * `<トークン>`は3でコピーした文字列で置き換えます。
 
 ```sh
-kisaragi-booth-utility upload -i <boothのアイテムのID> -p <アップロードするファイルのパス> -t <トークン>
+kisaragi-booth-utility upload -i <アイテムID> -p <アップロードするファイルのパス> -t <トークン>
 ```
+
+5. 参考に、使用例を示します。
+```powershell
+# PowerShell
+kisaragi-booth-utility upload -i 1234567 -p ./利用規約.pdf -t this_is_dummy_token
+```
+
+```sh
+#!/bin/sh
+# Linux / macOS
+kisaragi-booth-utility upload -i 1234567 -p ./利用規約.pdf -t this_is_dummy_token
+```
+
+6. サイズが表示されたなら成功です。お疲れ様でした。
 
 ### GitHub Actions
 当面の間次の方法で代替できます。
