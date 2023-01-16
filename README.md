@@ -179,6 +179,21 @@ jobs:
   * ポート番号
 * このアプリケーションは、アカウントの認証が必要な操作を行う際、その認証情報をピクシブ株式会社のサーバーへ送信します。
 
+## ライセンス
+以下のファイルはすべてMITライセンスおよびApache License, Version 2.0のデュアルライセンスで提供します。
+* `src`下のソースコード
+* ソースコードをコンパイルすることによって生成されたバイナリ
+* `.github`下のファイル
+* `docs`下のファイル
+* `README.md`
+* `.misspell`
+* `misspell.sh`
+
+以下のファイルは[Creative Commons Zero](https://creativecommons.jp/sciencecommons/aboutcc0/)で提供します。
+* `.gitignore`
+* `Cargo.toml`
+* `Cargo.lock`
+
 ## ピクシブ株式会社の担当者様へ
 このプロジェクトをご覧いただきましてありがとうございます。
 お問い合わせいただく際は、電子メールでのお問い合わせをお願いいたします。
