@@ -1,6 +1,6 @@
 [package]
 name = "kisaragi-booth-utility"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
     "Kisaragi Marine <kisaragi.effective@gmail.com>",
 ]
