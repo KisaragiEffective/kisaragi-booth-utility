@@ -16,15 +16,85 @@ KisaragiEffectiveが開発した[BOOTH][BOOTH-top]™<sup>†1</sup>の利用を
 * …
 
 ## このアプリケーションの使い方
+### ダウンロード
+1. [Releases](https://github.com/KisaragiEffective/kisaragi-booth-utility/releases)からダウンロードします。
+2. 一番上にあるバージョンを見ます。
+3. `<プラットフォーム>`は以下のとおりです。
+    * Windows: x86_64-pc-windows-gnu
+    * Linux: unknown-linux-musl
+    * macOS: x86_64-apple-darwin
+4. `<拡張子>`は次のとおりです。
+    * Windows: `zip`
+    * Linux: `tar.gz`または`tar.xz`
+    * macOS: `zip`
+5. `kisaragi-booth-utility_<バージョン>_<プラットフォーム>.<拡張子>`と`kisaragi-booth-utility_<バージョン>_<プラットフォーム>.<拡張子>.sha256sum`をダウンロードします。
+6. (推奨) [ハッシュ値を検証](#ハッシュ値の検証)します。
+7. `kisaragi-booth-utility_<バージョン>_<プラットフォーム>.<拡張子>`を展開します。
+8. 使用を開始するためには、[コマンドライン](#コマンドライン)へ移動します。
+
+#### ハッシュ値の検証
+Windows:
+
+1. <kbd>Win</kbd> + <kbd>R</kbd>キーを押して、`powershell`と入力し、<kbd>Enter</kbd>を押します。
+2. 次のコマンドをコピーアンドペーストして<kbd>Enter</kbd>を押します。
+
+```pwsh
+$archive_file = "kisaragi-booth-utility_0.1.1_x86_64-pc-windows-gnu.zip"
+$hash_file = $archive_file + ".sha256sum"
+$actual_hash = if ($PSVersionTable.PSCompatibleVersions -contains [System.Version]::New(4, 0)) {
+  $hash_obj = Get-FileHash $archive_file -Algorithm SHA256
+  $hash_obj.Hash.ToLower() + " " + $(Split-Path $hash_obj.Path -leaf)
+} else {
+  # Get-FileHash is unsupported
+  $hasher = [System.Security.Cryptography.SHA256]::Create()
+  $io = New-Object System.IO.StreamReader $archive_file
+  $hash_arr = $hasher.ComputeHash($io.BaseStream)
+  $stream.Close()
+  $hash = ""
+  $hash_arr | %{ $hash += $_.ToString("x2") }
+  $hash
+}
+$expected_hash = (type $hash_file) -join ""
+if ($actual_hash -eq $expected_hash) {
+  Write-Host "Hash OK"
+} else {
+  Write-Error "Hash Error: '$actual_hash' != '$expected_hash'"
+}
+```
+
+3. `Hash OK`と表示された場合、検証が完了しています。
+
+Linux/macOS:
+
+1. お好みのPOSIX互換シェルを開きます。
+2. 次のコードをコピーアンドペーストして実行します。macOSでは`sha256sum`を`gsha256sum`に変える必要があります。
+
+```sh
+#!/bin/sh
+actual_hash=$(sha256sum kisaragi-booth-utility_0.1.1_x86_64-unknown-linux-musl.tar.gz)
+expected_hash=$(cat kisaragi-booth-utility_0.1.1_x86_64-unknown-linux-musl.tar.gz.sha256sum)
+if [ "$original_hash" -eq "$expected_hash" ]; then
+    echo "Hash OK"
+else
+    echo "Hash Error: '$actual_hash' != '$expected_hash'" >&2
+fi
+```
+
+3. `Hash OK`と表示された場合、検証が完了しています。
+
 ### コマンドライン
-1. releasesからダウンロードします。
+1. `cmd.exe`、`powershell.exe`、`/bin/sh`、`/bin/bash`、`/bin/zsh`などお好みの「シェル」を開きます。
 2. 以下のコマンドでパスワードを取得します。
+    * `<ブラウザ>`は`firefox`または`chromium`で置き換えてください。`chromium`を指定するべきブラウザは、Chrome、Edge (バージョン79以降)、Opera (バージョン15以降)、Vivaldi、その他Chromiumを採用しているブラウザです。
+      * Internet Explorer、Edge (バージョン18以前)、Safariは手元に試せる環境を用意できないためサポートしません。
+    * `<場所>`についてはクッキーが保存されているファイルを指定します。標準的な場所を以下に示します。この場所にない場合、Chromiumをベースとした他のブラウザを使っているか、あるいはプロファイルの場所やインストールする場所を変更されている可能性があります。前者については当該ブラウザのドキュメンテーションを参照してください。後者については恐れ入りますがサポートいたしかねます。
 
 ```text
 kisaragi-booth-utility get-authorization-token --cookie-file <場所> --browser <ブラウザ>
 ```
 
-`<ブラウザ>`は`firefox`または`chromium`で置き換えてください。`chromium`を指定するべきブラウザは、Chrome、Edge (バージョン79以降)、Opera (バージョン15以降)、Vivaldi、その他Chromiumを採用しているブラウザです。Internet Explorer、Edge (バージョン18以前)、Safariは手元に試せる環境を用意できないためサポートしません。また、`<場所>`についてはクッキーが保存されているファイルを指定します。標準的な場所を以下に示します。この場所にない場合、Chromiumをベースとした他のブラウザを使っているか、あるいはプロファイルの場所やインストールする場所を変更されている可能性があります。前者については当該ブラウザのドキュメンテーションを参照してください。後者については恐れ入りますがサポートいたしかねます。
+<details><summary>参考：標準的なクッキーが保存されている場所</summary>
+
 * Windows
   * Chrome:  `C:\Users\<ユーザー名>\AppData\Local\Google\Chrome\User Data\<プロファイル名>\Cookies`
   * Edge:    `C:\Users\<ユーザー名>\AppData\Local\Microsoft\Edge\User Data\<プロファイル名>\Cookies`
@@ -47,11 +117,13 @@ kisaragi-booth-utility get-authorization-token --cookie-file <場所> --browser 
   * Chromium:不明
   * Firefox: `~/Library/Application Support/Firefox/`
 
-3. トークンが文字列として出力されるので、選択してコピーします。**この文字列はあなたのパスワードと同じです**。誰にも明かさないようにしてください。
+</details>
+
+3. 「クッキー」が文字列として出力されるので、選択してコピーします。**この文字列はあなたのパスワードと同じ力を持ちます**。誰にも教えないようにしてください。
 4. 以下のコマンドでアップロードします。
     * `<アイテムID>`はBOOTHのIDを指定します。例えば、URLが `https://booth.pm/ja/items/1234567` なら、指定するのは`1234567`です。
     * `<アップロードするファイルのパス>`はファイルのパスです。相対パスまたは絶対パスが指定できます。
-    * `<トークン>`は3でコピーした文字列で置き換えます。
+    * `<クッキー>`は3でコピーした文字列で置き換えます。
 
 ```sh
 kisaragi-booth-utility upload -i <アイテムID> -p <アップロードするファイルのパス> -t <トークン>
@@ -61,6 +133,11 @@ kisaragi-booth-utility upload -i <アイテムID> -p <アップロードする�
 
 ```powershell
 # PowerShell
+kisaragi-booth-utility upload -i 1234567 -p ./利用規約.pdf -t this_is_dummy_token
+```
+
+```bat
+@rem cmd.exe
 kisaragi-booth-utility upload -i 1234567 -p ./利用規約.pdf -t this_is_dummy_token
 ```
 
@@ -74,9 +151,11 @@ kisaragi-booth-utility upload -i 1234567 -p ./利用規約.pdf -t this_is_dummy_
 
 ### GitHub Actions
 当面の間次の方法で代替できます。
-1. コマンドラインの手順2と3を行います。
+1. [コマンドライン](#コマンドライン)の手順1から3を行います。
 2. 出力された文字列を[暗号化されたシークレット](https://docs.github.com/ja/actions/security-guides/encrypted-secrets)に設定します。ここでは名前を`BOOTH_LOGIN_CREDENTIAL`にしたと仮定します。
 3. 次のYAMLファイルを`.github/workflows`の直下に作成します。
+
+<details><summary>ワークフローファイル</summary>
 
 ```yml
 # --- CREDIT ---
@@ -152,8 +231,8 @@ jobs:
         run: |
           actual_hash=$(sha256sum kisaragi-booth-utility_0.1.0.20220115231500_x86_64-unknown-linux-musl.tar.gz)
           expected_hash=$(cat kisaragi-booth-utility_0.1.0.20220115231500_x86_64-unknown-linux-musl.tar.gz.sha256sum)
-          if [ "$original_hash" -ne "$expected_hash" ]; then
-            echo "[E] different hashes: '$original_hash' != '$expected_hash'"
+          if [ "$actual_hash" -ne "$expected_hash" ]; then
+            echo "[E] different hashes: '$actual_hash' != '$expected_hash'"
             exit 1
           fi
       - name: Extract binary
@@ -165,6 +244,8 @@ jobs:
         run: |
           kisaragi-booth-utility -i 1234567 -p target/release/kisaragi-booth-utility -t "$BOOTH_DEPLOY_TOKEN"
 ```
+
+</details>
 
 ## ピクシブ株式会社が定める規約との関連性
 * ご利用にあたってはピクシブ株式会社が定める[サービス共通規約](https://policies.pixiv.net/)及び[BOOTHに対する個別規約](https://policies.pixiv.net/#booth)をお守りください。
