@@ -17,7 +17,7 @@ use crate::sqlite::SQLite3ErrorWithCompare;
 
 /// Utility around booth.pm, developed by Kisaragi Marine.
 /// This project is not related, developed, nor affiliated by pixiv inc.
-/// Please refer <https://policies.pixiv.net/> and <https://policies.pixiv.net/#booth>
+/// Please refer to <https://policies.pixiv.net/> and <https://policies.pixiv.net/#booth>
 /// before use.
 #[derive(Parser)]
 #[command(author, version, about, long_about)]
