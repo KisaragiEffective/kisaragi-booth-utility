@@ -21,7 +21,7 @@ MD004:
 MD005: true
 
 # MD006/ul-start-left - Consider starting bulleted lists at the beginning of the line
-MD006: true
+MD006: false
 
 # MD007/ul-indent - Unordered list indentation
 MD007:
@@ -128,9 +128,7 @@ MD027: true
 MD028: true
 
 # MD029/ol-prefix - Ordered list item prefix
-MD029:
-  # List style
-  style: "one_or_ordered"
+MD029: false
 
 # MD030/list-marker-space - Spaces after list markers
 MD030:
@@ -154,7 +152,7 @@ MD032: false
 # MD033/no-inline-html - Inline HTML
 MD033:
   # Allowed elements
-  allowed_elements: [ "small", "div", "span", "details", "summary" ] # GitHub-flavored markdown allows these HTML element
+  allowed_elements: [ "small", "div", "span", "details", "summary", "sup" ] # GitHub-flavored markdown allows these HTML element
 
 # MD034/no-bare-urls - Bare URL used
 MD034: true

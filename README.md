@@ -19,7 +19,8 @@ KisaragiEffectiveが開発した[BOOTH][BOOTH-top]™<sup>†1</sup>の利用を
 ### コマンドライン
 1. releasesからダウンロードします。
 2. 以下のコマンドでパスワードを取得します。
-```
+
+```text
 kisaragi-booth-utility get-authorization-token --cookie-file <場所> --browser <ブラウザ>
 ```
 
@@ -57,6 +58,7 @@ kisaragi-booth-utility upload -i <アイテムID> -p <アップロードする�
 ```
 
 5. 参考に、使用例を示します。
+
 ```powershell
 # PowerShell
 kisaragi-booth-utility upload -i 1234567 -p ./利用規約.pdf -t this_is_dummy_token
