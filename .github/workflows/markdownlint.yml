@@ -11,7 +11,7 @@ on:
       - "**.md"
       - ".github/workflows/markdownlint.yml"
       - "./.github/markdown-lint-config.yml"
-    branches: [ live ]
+    branches: [ master ]
 
   workflow_dispatch:
 
