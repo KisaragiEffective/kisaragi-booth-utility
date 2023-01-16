@@ -88,6 +88,7 @@ fi
     * `<ブラウザ>`は`firefox`または`chromium`で置き換えてください。`chromium`を指定するべきブラウザは、Chrome、Edge (バージョン79以降)、Opera (バージョン15以降)、Vivaldi、その他Chromiumを採用しているブラウザです。
       * Internet Explorer、Edge (バージョン18以前)、Safariは手元に試せる環境を用意できないためサポートしません。
     * `<場所>`についてはクッキーが保存されているファイルを指定します。標準的な場所を以下に示します。この場所にない場合、Chromiumをベースとした他のブラウザを使っているか、あるいはプロファイルの場所やインストールする場所を変更されている可能性があります。前者については当該ブラウザのドキュメンテーションを参照してください。後者については恐れ入りますがサポートいたしかねます。
+
 ```text
 kisaragi-booth-utility get-authorization-token --cookie-file <場所> --browser <ブラウザ>
 ```
@@ -245,7 +246,6 @@ jobs:
 ```
 
 </details>
-
 
 ## ピクシブ株式会社が定める規約との関連性
 * ご利用にあたってはピクシブ株式会社が定める[サービス共通規約](https://policies.pixiv.net/)及び[BOOTHに対する個別規約](https://policies.pixiv.net/#booth)をお守りください。
