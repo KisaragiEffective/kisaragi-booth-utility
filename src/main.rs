@@ -15,8 +15,12 @@ use thiserror::Error;
 use crate::booth::{UploadError, UploadResult};
 use crate::sqlite::SQLite3ErrorWithCompare;
 
-#[derive(Parser)]
+/// Utility around booth.pm, developed by Kisaragi Marine.
 /// This project is not related, developed, nor affiliated by pixiv inc.
+/// Please refer to <https://policies.pixiv.net/> and <https://policies.pixiv.net/#booth>
+/// before use.
+#[derive(Parser)]
+#[command(author, version, about, long_about)]
 enum CommandLineSubCommand {
     GetAuthorizationToken {
         #[clap(short, long)]

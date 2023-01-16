@@ -1,0 +1,31 @@
+
+name: Markdown lint
+on:
+  push:
+    paths:
+      - "**.md"
+      - ".github/workflows/markdownlint.yml"
+      - "./.github/markdown-lint-config.yml"
+  pull_request:
+    paths:
+      - "**.md"
+      - ".github/workflows/markdownlint.yml"
+      - "./.github/markdown-lint-config.yml"
+    branches: [ master ]
+
+  workflow_dispatch:
+
+jobs:
+  markdown-lint:
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v3
+
+      - name: Markdown Linting Action
+        uses: avto-dev/markdown-lint@v1.5.0
+        with:
+          args: './**/*.md'
+          config: './.github/markdown-lint-config.yml'
