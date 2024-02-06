@@ -15,8 +15,12 @@ use thiserror::Error;
 use crate::booth::{UploadError, UploadResult};
 use crate::sqlite::SQLite3ErrorWithCompare;
 
-#[derive(Parser)]
+/// Utility around booth.pm, developed by Kisaragi Marine.
 /// This project is not related, developed, nor affiliated by pixiv inc.
+/// Please refer to <https://policies.pixiv.net/> and <https://policies.pixiv.net/#booth>
+/// before use.
+#[derive(Parser)]
+#[command(author, version, about, long_about)]
 enum CommandLineSubCommand {
     GetAuthorizationToken {
         #[clap(short, long)]
@@ -181,11 +185,13 @@ async fn main() -> Result<(), ExecutionError> {
                 // 欠けているとリクエストが正しくても422
                 .header("X-CSRF-Token", csrf_token);
 
-            if cfg!(unix) {
-                if let Some(language_preference) = std::env::var_os("LANG") {
-                    use std::os::unix::ffi::OsStrExt;
-                    if localize_remote_error && language_preference.as_bytes().starts_with(b"ja_JP") {
-                        req = req.header("Accept-Language", "ja");
+            cfg_if::cfg_if! {
+                if #[cfg(unix)] {
+                    if let Some(language_preference) = std::env::var_os("LANG") {
+                        use std::os::unix::ffi::OsStrExt;
+                        if localize_remote_error && language_preference.as_bytes().starts_with(b"ja_JP") {
+                            req = req.header("Accept-Language", "ja");
+                        }
                     }
                 }
             }
