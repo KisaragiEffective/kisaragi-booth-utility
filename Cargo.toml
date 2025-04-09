@@ -27,4 +27,4 @@ sqlite3 = "0.24.0"
 strum = { version = "0.26.1", features = ["derive"] }
 tempfile = "3.10.1"
 thiserror = "2.0.0"
-tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "macros"] }
+tokio = { version = "1.43.1", features = ["rt", "rt-multi-thread", "macros"] }
