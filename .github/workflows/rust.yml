@@ -23,7 +23,7 @@ jobs:
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - name: Setup cross library
-      run: rustup target add --target "$TARGET"
+      run: rustup target add "$TARGET"
       env:
         TARGET: ${{ matrix.target }}
     - name: Install musl
